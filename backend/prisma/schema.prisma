@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/infra/database/prisma/generated"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  categories   Category[]
+  transactions Transaction[]
+
+  @@map("users")
+}
+
+model Category {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  title           String
+  /// Título sem acentos e em minúsculas: garante a unicidade por usuário.
+  normalizedTitle String   @map("normalized_title")
+  description     String?
+  /// Chave de um dos 16 ícones do Figma (ex.: "utensils").
+  icon            String
+  /// Chave de uma das 7 cores do Figma (ex.: "green").
+  color           String
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, normalizedTitle])
+  @@map("categories")
+}
+
+model Transaction {
+  id                    String          @id @default(uuid())
+  userId                String          @map("user_id")
+  categoryId            String          @map("category_id")
+  description           String
+  /// Descrição sem acentos e em minúsculas: usada na busca.
+  normalizedDescription String          @map("normalized_description")
+  /// Sempre positivo. O sinal vem de `type`.
+  amountInCents         Int             @map("amount_in_cents")
+  type                  TransactionType
+  /// Dia do calendário, guardado como meia-noite UTC.
+  date                  DateTime
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Categoria com transações não pode ser excluída (docs/decisions/0007).
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([userId, date])
+  @@index([categoryId])
+  @@map("transactions")
+}
